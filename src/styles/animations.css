@@ -1,0 +1,71 @@
+/* ============================================================
+   styles/animations.css
+   Keyframe animations and transition helpers
+   ============================================================ */
+
+/* ── Fade in (used on result panels) ─────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+.anim-fade   { animation: fadeIn .38s ease both; }
+.anim-fade-1 { animation: fadeIn .38s ease .05s both; }
+.anim-fade-2 { animation: fadeIn .38s ease .10s both; }
+.anim-fade-3 { animation: fadeIn .38s ease .15s both; }
+.anim-fade-4 { animation: fadeIn .38s ease .22s both; }
+.anim-fade-5 { animation: fadeIn .38s ease .30s both; }
+
+/* ── Slide in from left ───────────────────────────────────── */
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-18px); }
+  to   { opacity: 1; transform: translateX(0);     }
+}
+.anim-slide-left { animation: slideInLeft .35s ease both; }
+
+/* ── Pulse (live indicator) ──────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1);   }
+  50%       { opacity: .4; transform: scale(1.5); }
+}
+
+/* ── Shake (error feedback) ──────────────────────────────── */
+@keyframes shake {
+  0%, 100% { transform: translateX(0);   }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px);  }
+}
+.anim-shake { animation: shake .4s ease; }
+
+/* ── Spin (loading spinner) ──────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Bounce in (for result badges) ──────────────────────── */
+@keyframes bounceIn {
+  0%   { opacity: 0; transform: scale(.7); }
+  60%  { opacity: 1; transform: scale(1.08); }
+  80%  { transform: scale(.96); }
+  100% { transform: scale(1); }
+}
+.anim-bounce { animation: bounceIn .45s cubic-bezier(.4,0,.2,1) both; }
+
+/* ── Progress bar fill ───────────────────────────────────── */
+@keyframes growWidth {
+  from { width: 0; }
+}
+.anim-grow { animation: growWidth .7s cubic-bezier(.4,0,.2,1) both; }
+
+/* ── Glow (voice active) ─────────────────────────────────── */
+@keyframes voiceGlow {
+  0%, 100% { box-shadow: 0 4px 14px rgba(230,81,0,.32); }
+  50%       { box-shadow: 0 6px 24px rgba(230,81,0,.65); }
+}
+.anim-voice-active { animation: voiceGlow 1.2s ease infinite; }
+
+/* ── Subtle hover lift ───────────────────────────────────── */
+.hover-lift {
+  transition: transform .2s, box-shadow .2s;
+}
+.hover-lift:hover {
+  transform:  translateY(-3px);
+  box-shadow: var(--shadow-lg);
+}

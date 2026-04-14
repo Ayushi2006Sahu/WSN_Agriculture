@@ -1,0 +1,98 @@
+/* ============================================================
+   styles/battery.css
+   Battery visual component styles
+   ============================================================ */
+
+/* ── Battery container ───────────────────────────────────── */
+.battery {
+  position:      relative;
+  border:        3.5px solid currentColor;
+  border-radius: 9px;
+  overflow:      hidden;
+  background:    #F5F5F5;
+  flex-shrink:   0;
+}
+
+/* Default size — overridden by inline width/height via JS */
+.battery--md { width: 52px; height: 104px; }
+.battery--sm { width: 40px; height:  80px; }
+.battery--lg { width: 64px; height: 128px; }
+
+/* Battery cap (top nub) */
+.battery__cap {
+  position:      absolute;
+  top:           -8px;
+  left:          50%;
+  transform:     translateX(-50%);
+  width:         18px;
+  height:        6px;
+  background:    currentColor;
+  border-radius: 3px 3px 0 0;
+  opacity:       .7;
+}
+
+/* Battery fill level */
+.battery__fill {
+  position:      absolute;
+  bottom:        0;
+  left:          0;
+  right:         0;
+  opacity:       .85;
+  transition:    height .9s cubic-bezier(.4,0,.2,1);
+}
+
+/* Percentage label centered */
+.battery__pct {
+  position:      absolute;
+  top:           50%;
+  left:          50%;
+  transform:     translate(-50%, -50%);
+  font-family:   var(--font-display);
+  font-weight:   800;
+  font-size:     11px;
+  color:         #2A2A2A;
+  z-index:       2;
+  white-space:   nowrap;
+  text-shadow:   0 1px 2px rgba(255,255,255,.8);
+}
+
+/* ── Battery status colors (applied via JS barColor) ─────── */
+/* These are reference values — actual color set dynamically */
+.battery--critical { color: var(--danger); }
+.battery--low      { color: var(--warn);   }
+.battery--medium   { color: var(--sky);    }
+.battery--good     { color: var(--leaf);   }
+.battery--excellent{ color: #1B5E20;       }
+
+/* ── Battery info block ──────────────────────────────────── */
+.battery-info { flex: 1; }
+
+.battery-info__time {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size:   1.65rem;
+  line-height: 1;
+}
+.battery-info__days  { font-size: .78rem; color: var(--text-muted); margin-top: 3px; }
+.battery-info__status { margin-top: 7px; }
+.battery-info__replace { font-size: .75rem; color: #999; margin-top: 5px; }
+.battery-info__drain   { font-size: .72rem; color: var(--text-faint); margin-top: 2px; }
+.battery-info__note    { font-size: .72rem; font-weight: 700; margin-top: 4px; }
+
+.battery-alert {
+  margin-top:    12px;
+  background:    #F5F5F5;
+  border-radius: 10px;
+  padding:       9px 13px;
+  font-size:     .78rem;
+  color:         #555;
+  line-height:   1.6;
+}
+
+/* ── Battery card wrapper ────────────────────────────────── */
+.battery-card-inner {
+  display:     flex;
+  gap:         16px;
+  align-items: center;
+  margin-top:  10px;
+}
