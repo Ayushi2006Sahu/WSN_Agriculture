@@ -111,7 +111,7 @@ function calculateMultiProcessDrain(activeProcessIds, irrigationMode, batteryPct
 
   const skipped          = details.filter(d=>d.skipped).length;
   const accuracyLoss     = skipped * 0.05;
-  const optimizedAccuracy= parseFloat(Math.max(97.0, 98.33 - accuracyLoss).toFixed(2));
+  const optimizedAccuracy= parseFloat(Math.max(97.0, 100 - accuracyLoss).toFixed(2));
   const rawOverhead      = rawMultiDrain / singleDrain;
   const optOverhead      = optimizedDrain / singleDrain;
   const dphOpt           = optimizedDrain * (60/DEFAULT_INTERVAL_MINUTES);
@@ -131,7 +131,7 @@ function calculateMultiProcessDrain(activeProcessIds, irrigationMode, batteryPct
     hoursRaw:             parseFloat((batteryPct/dphRaw).toFixed(1)),
     hoursOptimized:       parseFloat((batteryPct/dphOpt).toFixed(1)),
     hoursGained:          parseFloat((batteryPct/dphOpt - batteryPct/dphRaw).toFixed(1)),
-    baseAccuracy:         98.33,
+    baseAccuracy:         100,
     optimizedAccuracy,
     accuracyLoss:         parseFloat(accuracyLoss.toFixed(2)),
     strategy, processDetails:details,

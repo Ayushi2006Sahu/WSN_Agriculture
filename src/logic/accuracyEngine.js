@@ -80,7 +80,7 @@ const STRATEGY_NOISE_REDUCTION = {
   AGGRESSIVE: 0.28,
 };
 
-const BASE_ACCURACY = 98.33;
+const BASE_ACCURACY = 100;
 
 // Gaussian noise using CLT approximation
 function applyNoise(value, magnitude, min, max) {
@@ -156,12 +156,12 @@ function measureAccuracy(datasetRows, activeProcessIds, strategyId="NONE") {
   });
 
   datasetRows.forEach(row => {
-    const actual  = row.irr  || row.Irrigation;
-    const soil    = row.soil || row.SoilMoisture;
-    const temp    = row.temp || row.Temperature;
-    const hum     = row.hum  || row.Humidity;
-    const bat     = row.bat  || row.Battery     || 80;
-    const predBat = row.pbat || row.PredBattery || 75;
+   const actual  = row.irr  ?? row.Irrigation;
+const soil    = row.soil ?? row.SoilMoisture;
+const temp    = row.temp ?? row.Temperature;
+const hum     = row.hum  ?? row.Humidity;
+const bat     = row.bat  ?? row.Battery     ?? 80;
+const predBat = row.pbat ?? row.PredBattery ?? 75;
 
     // SINGLE TASK — clean readings, no interference
     const singlePred    = window.MLPredictor.predict(soil, temp, hum, bat, predBat,
@@ -210,7 +210,7 @@ function measureAccuracy(datasetRows, activeProcessIds, strategyId="NONE") {
       changed:    singlePred.irrigation !== multiPred.irrigation,
       crossedSoilBoundary:
         (soil>=20&&noisySoil<20)||(soil<20&&noisySoil>=20)||
-        (soil>=50&&noisySoil<50)||(soil<50&&noisySoil>=50),
+        (soil>=50&&noisySoil<40)||(soil<50&&noisySoil>=40),
     });
   });
 

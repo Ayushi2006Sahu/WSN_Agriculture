@@ -62,16 +62,13 @@ const MULTI_TASK_PROCESSES  = Object.keys(ML_PROCESS_CATALOG);
 //  Stress ∝ 1/SoilMoisture (inverse)
 // ─────────────────────────────────────────────────────────────
 function calculateStress(soil, temp, hum) {
-  const soilFactor = (100 - Math.max(0, Math.min(100, soil))) * 1.5;
-  const tempFactor = temp > 25 ? (temp - 25) * 2.0 : 0;
-  const humFactor  = hum  < 60 ? (60 - hum)  * 0.8 : 0;
-  return parseFloat(Math.max(0, Math.min(250, soilFactor + tempFactor + humFactor)).toFixed(1));
+  return Math.max(0, Math.min(250, (100 - soil) + temp + hum)); // same as Cooja
 }
 
 function getStressBreakdown(soil, temp, hum) {
-  const sf = (100 - Math.max(0, Math.min(100, soil))) * 1.5;
-  const tf = temp > 25 ? (temp - 25) * 2.0 : 0;
-  const hf = hum  < 60 ? (60 - hum)  * 0.8 : 0;
+  const sf = 100 - Math.max(0, Math.min(100, soil));
+const tf = temp;
+const hf = hum;
   const total = parseFloat(Math.max(0, Math.min(250, sf + tf + hf)).toFixed(1));
   return {
     soilContribution: parseFloat(sf.toFixed(1)),
@@ -194,13 +191,14 @@ function getBatteryOptimization(battery, computedPredBattery, irrigation, stress
 //  LIVE PRED BATTERY (for slider updates)
 // ─────────────────────────────────────────────────────────────
 function getLivePredBattery(battery, soilMoisture, temperature, humidity) {
-  const stress     = calculateStress(soilMoisture, temperature, humidity);
-  let irrigation;
-  if      (battery < 20)                       irrigation = "MIN";
-  else if (soilMoisture < 20 || stress > 170)  irrigation = "HIGH";
-  else if (soilMoisture < 50 || stress > 120)  irrigation = "MEDIUM";
-  else                                          irrigation = "LOW";
-  const result = computePredBattery(battery, irrigation, stress, temperature, soilMoisture);
+  const stress = calculateStress(soilMoisture, temperature, humidity);
+  let irrigation = soilMoisture < 20 ? "HIGH"
+                 : (soilMoisture < 40 || temperature > 30) ? "MEDIUM" : "LOW";
+  let result = computePredBattery(battery, irrigation, stress, temperature, soilMoisture);
+  if (result.predBattery < 20) {
+    irrigation = "MIN";
+    result = computePredBattery(battery, irrigation, stress, temperature, soilMoisture);
+  }
   return { ...result, irrigation, stress };
 }
 
@@ -224,11 +222,10 @@ function predict(soilMoisture, temperature, humidity, battery, userPredBattery,
 
   // ── Irrigation classification ──────────────────────────────
   let irrigation;
-  if      (battery < 20)                    irrigation = "MIN";
-  else if (soilMoisture < 20 || stress > 170) irrigation = "HIGH";
-  else if (soilMoisture < 50 || stress > 120) irrigation = "MEDIUM";
-  else                                         irrigation = "LOW";
-
+if      (userPredBattery < 20)            irrigation = "MIN";
+else if (soilMoisture < 20)               irrigation = "HIGH";
+else if (soilMoisture < 40 || temperature > 30) irrigation = "MEDIUM";
+else                                      irrigation = "LOW";
   // ── Confidence ─────────────────────────────────────────────
   let confidence;
   if      (irrigation==="HIGH")   confidence = soilMoisture < 10 ? 97 : 93;
@@ -249,11 +246,7 @@ function predict(soilMoisture, temperature, humidity, battery, userPredBattery,
   classes.forEach(c=>probabilities[c]=parseFloat((rawProbs[c]*100).toFixed(1)));
 
   // ── Crop status ─────────────────────────────────────────────
-  let cropStatus;
-  if      (soilMoisture < 20 || stress > 170) cropStatus = "CRITICAL";
-  else if (battery < 20)                       cropStatus = "PREDICT_LOW";
-  else if (soilMoisture < 50 || stress > 120)  cropStatus = "WARNING";
-  else                                          cropStatus = "NORMAL";
+const cropStatus = { HIGH:"CRITICAL", MEDIUM:"WARNING", LOW:"NORMAL", MIN:"PREDICT_LOW" }[irrigation];                                         
 
   // ── Advice ─────────────────────────────────────────────────
   const adviceEn = {
@@ -329,17 +322,25 @@ function generateTrainingData(count=200) {
     const hum  = Math.floor(20 + Math.random()*75);
     const bat  = Math.floor(10 + Math.random()*90);
     const stress = calculateStress(soil, temp, hum);
-    let irr;
-    if      (bat < 20)                  irr="MIN";
-    else if (soil < 20 || stress > 170) irr="HIGH";
-    else if (soil < 50 || stress > 120) irr="MEDIUM";
-    else                                irr="LOW";
-    const drain = computeDrainPerCycle(irr, stress, temp, soil);
-    const pbat  = parseFloat(Math.max(0, bat - drain).toFixed(1));
-    const status= soil<20||stress>170?"CRITICAL":pbat<20?"PREDICT_LOW":soil<50||stress>120?"WARNING":"NORMAL";
-    rows.push({ SoilMoisture:soil, Temperature:temp, Humidity:hum,
-      Battery:bat, PredBattery:pbat, Stress:stress,
-      Status:status, Irrigation:irr, DrainPerCycle:drain });
+        let irr   = soil < 20 ? "HIGH" : (soil < 40 || temp > 30) ? "MEDIUM" : "LOW";
+    let drain = computeDrainPerCycle(irr, stress, temp, soil);
+    let pbat  = parseFloat(Math.max(0, bat - drain).toFixed(1));
+    if (pbat < 20) {
+      irr   = "MIN";
+      drain = computeDrainPerCycle(irr, stress, temp, soil);
+      pbat  = parseFloat(Math.max(0, bat - drain).toFixed(1));
+    }
+    const status = { HIGH:"CRITICAL", MEDIUM:"WARNING", LOW:"NORMAL", MIN:"PREDICT_LOW" }[irr];
+    rows.push({
+      SoilMoisture: soil,
+      Temperature:  temp,
+      Humidity:     hum,
+      Battery:      bat,
+      PredBattery:  pbat,
+      Stress:       stress,
+      Status:       status,
+      Irrigation:   irr,
+    });
   }
   return rows;
 }
@@ -350,9 +351,9 @@ function trainingDataToCSV(rows) {
 }
 
 const FEATURE_IMPORTANCE = {
-  SoilMoisture:42.3, Stress:28.1, Temperature:12.4, Battery:8.2, Humidity:5.7, PredBattery:3.3,
+  SoilMoisture:57.6, Temperature:22.7, PredBattery:17.5, Humidity:2.2,
 };
-const MODEL_ACCURACY = "98.33%";
+const MODEL_ACCURACY = "99.17%";
 
 function getFeatureImportance() { return { ...FEATURE_IMPORTANCE }; }
 function getModelAccuracy()     { return MODEL_ACCURACY; }

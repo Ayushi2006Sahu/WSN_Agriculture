@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import BatteryVisual from '../components/BatteryVisual.jsx';
 import BatteryCard from '../components/BatteryCard.jsx';
 import ChartCanvas from '../components/ChartCanvas.jsx';
+import { REAL_DATA } from '../logic/realData';
+
+const NODE_COLORS = ["#C62828","#E65100","#F9A825","#2E7D32","#0277BD","#6A1B9A","#455A64"];
 
 function fmtDur(sec) {
   if (sec < 60)   return `${sec}s`;
@@ -128,6 +131,35 @@ export default function BatteryPage({ history }) {
   const liveStates = useMemo(() => {
     const s={}; NODES.forEach(n=>{ s[n.nodeId]=BP.getLiveNodeState(n.nodeId); }); return s;
   }, [tick]);
+    const coojaBattery = useMemo(() => {
+    const ids = [...new Set(REAL_DATA.map(r => r.node))].sort((a, b) => a - b);
+    const series = ids.map(id =>
+      REAL_DATA.filter(r => r.node === id).sort((a, b) => a.time - b.time).map(r => r.bat));
+    const maxLen = Math.max(...series.map(s => s.length));
+    const summary = ids.map((id, i) => ({
+      id, start: series[i][0], end: series[i][series[i].length - 1], n: series[i].length,
+    }));
+    const cfg = {
+      type: "line",
+      data: {
+        labels: Array.from({ length: maxLen }, (_, i) => i + 1),
+        datasets: ids.map((id, i) => ({
+          label: `Node ${id}`, data: series[i],
+          borderColor: NODE_COLORS[i % 7], backgroundColor: NODE_COLORS[i % 7],
+          tension: .3, pointRadius: 0, borderWidth: 2, fill: false,
+        })),
+      },
+      options: {
+        plugins: { legend: { position: "top" } },
+        scales: {
+          y: { min: 0, max: 100, ticks: { callback: v => v + "%" } },
+          x: { ticks: { maxTicksLimit: 10 }, title: { display: true, text: "Reading # (≈15 s of Cooja time each)" } },
+        },
+        animation: { duration: 400 },
+      },
+    };
+    return { cfg, summary };
+  }, []);
 
   const handleToggle = (nodeId, farmerName) => {
     const s = liveStates[nodeId]; if (!s) return;
@@ -175,7 +207,23 @@ export default function BatteryPage({ history }) {
           <NodeCard key={node.nodeId} nodeId={node.nodeId} nodeData={node} liveState={liveStates[node.nodeId]} onToggle={handleToggle} onRefresh={()=>setTick(t=>t+1)}/>
         ))}
       </div>
-
+              <div className="card" style={{ marginBottom:24 }}>
+        <div className="card__label" style={{ marginBottom:10 }}>
+          🛰️ Cooja (Contiki) — Real Battery Drain per Node
+        </div>
+        <ChartCanvas id="coojaBattery" config={coojaBattery.cfg} height="260px" />
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:12 }}>
+          {coojaBattery.summary.map((s, i) => (
+            <span key={s.id} style={{ background:"#F5F5F5", borderRadius:8, padding:"4px 10px", fontSize:".7rem", fontWeight:700, color:NODE_COLORS[i % 7] }}>
+              Node {s.id}: {s.start}% → {s.end}% ({s.n} readings)
+            </span>
+          ))}
+        </div>
+        <p style={{ fontSize:".65rem", color:"#aaa", marginTop:8 }}>
+          Source: Cooja simulation log (output.log), one line per node. Battery value as reported by each mote.
+        </p>
+      </div>
+      
       {allSessions.length>0 && (
         <div className="card" style={{ marginBottom:24 }}>
           <div className="card__label" style={{ marginBottom:12 }}>📋 Farm Operation Log — All Sessions</div>

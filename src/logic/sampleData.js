@@ -33,17 +33,17 @@ const SAMPLE_DATA = [
 
 const DATASET_STATS = {
   totalRows:         596,
-  testAccuracy:      "98.33%",
-  cvAccuracy:        "99.67% ± 0.41%",
+  testAccuracy:      "99.17%",
+  cvAccuracy:        "99.66% ± 0.67%",
   classDistribution: { HIGH:19, LOW:52, MEDIUM:40, MIN:9 },
   bestParams:        { n_estimators:50, max_depth:null, min_samples_split:5 },
 };
 
 const CLASSIFICATION_REPORT = [
   { cls:"HIGH",   precision:1.00, recall:1.00, f1:1.00, support:19 },
-  { cls:"LOW",    precision:1.00, recall:0.96, f1:0.98, support:52 },
-  { cls:"MEDIUM", precision:0.95, recall:1.00, f1:0.97, support:40 },
-  { cls:"MIN",    precision:1.00, recall:1.00, f1:1.00, support:9  },
+  { cls:"LOW",    precision:1.00, recall:0.98, f1:0.99, support:52 },
+  { cls:"MEDIUM", precision:1.00, recall:1.00, f1:1.00, support:40 },
+  { cls:"MIN",    precision:0.90, recall:1.00, f1:0.95, support:9  },
 ];
 
 const SENSOR_NODES = [

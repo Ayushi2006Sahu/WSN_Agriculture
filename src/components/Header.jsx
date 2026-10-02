@@ -17,7 +17,7 @@ export default function Header({ predictionCount }) {
       </div>
       <div className="header__right">
         <div className="header__live" title="System live" aria-label="System live" />
-        <span className="header__pill header__pill--green">✅ 98.33% Accuracy</span>
+        <span className="header__pill header__pill--green">✅ {window.MLPredictor?.getModelAccuracy?.() ?? "99.17%"} Accuracy</span>
         {predictionCount > 0 && (
           <span className="header__pill header__pill--orange">🧠 {predictionCount} Prediction{predictionCount !== 1 ? "s" : ""}</span>
         )}

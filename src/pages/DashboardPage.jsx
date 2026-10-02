@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import ChartCanvas from '../components/ChartCanvas.jsx';
+import { REAL_DATA } from '../logic/realData';
 
 const IRR_COLORS = { HIGH:"#C62828", MEDIUM:"#E65100", LOW:"#2E7D32", MIN:"#0277BD" };
 const STATUS_COLORS = { CRITICAL:"#C62828", WARNING:"#E65100", NORMAL:"#2E7D32", PREDICT_LOW:"#0277BD" };
@@ -10,11 +12,24 @@ const seasons = [
 ];
 
 export default function DashboardPage({ history }) {
-  const { SAMPLE_DATA, DATASET_STATS, CLASSIFICATION_REPORT } = window.SampleData;
+  const { DATASET_STATS, CLASSIFICATION_REPORT } = window.SampleData;
   const ML = window.MLPredictor;
+    const strategyRows = useMemo(
+    () => window.AccuracyEngine
+      ? window.AccuracyEngine.compareStrategies(REAL_DATA, ML.MULTI_TASK_PROCESSES)
+      : [], []);
+
+  const coojaCounts = { HIGH:0, MEDIUM:0, LOW:0, MIN:0 };
+  REAL_DATA.forEach(r => { coojaCounts[r.irr]++; });
+  const coojaConfig = {
+    type:"doughnut",
+    data:{ labels:["HIGH","MEDIUM","LOW","MIN"],
+           datasets:[{ data:Object.values(coojaCounts), backgroundColor:Object.values(IRR_COLORS), borderWidth:2 }] },
+    options:{ plugins:{ legend:{ position:"right" } }, cutout:"60%" },
+  };
   const total   = history.length;
   const avgConf = total > 0 ? +(history.reduce((a,r) => a+r.confidence, 0)/total).toFixed(1) : 0;
-  const avgMs   = total > 0 ? +(history.reduce((a,r) => a+r.timeMs,    0)/total).toFixed(2) : 0;
+ const avgMs   = total > 0 ? +(history.reduce((a,r) => a+(r.taskMode==="single" ? r.singleTimeMs : r.multiTimeMs), 0)/total).toFixed(2) : 0;
   const avgBat  = total > 0 ? +(history.reduce((a,r) => a+r.form.battery,0)/total).toFixed(1) : 0;
 
   const irrCounts = { HIGH:0, MEDIUM:0, LOW:0, MIN:0 };
@@ -111,6 +126,35 @@ export default function DashboardPage({ history }) {
           </table>
         </div>
       </div>
+      <div className="grid-2" style={{ marginBottom:20 }}>
+        <div className="card">
+          <div className="card__label" style={{ marginBottom:10 }}>
+            🛰️ Cooja (Contiki) Dataset — Irrigation Classes ({REAL_DATA.length} rows)
+          </div>
+          <ChartCanvas id="coojaDonut" config={coojaConfig} height="210px" />
+        </div>
+        <div className="card">
+          <div className="card__label" style={{ marginBottom:10 }}>Single vs Multi-Task Accuracy on Cooja Data</div>
+          <div className="overflow-x">
+            <table className="data-table">
+              <thead><tr><th>Strategy</th><th>Single</th><th>Multi</th><th>Drop</th></tr></thead>
+              <tbody>
+                {strategyRows.map(s => (
+                  <tr key={s.strategyId}>
+                    <td>{s.icon} {s.strategyName}</td>
+                    <td>{s.singleAccuracy}%</td>
+                    <td>{s.multiAccuracy}%</td>
+                    <td style={{ color:"#C62828", fontWeight:700 }}>−{s.accuracyDrop}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ fontSize:".65rem", color:"#aaa", marginTop:8 }}>
+            Multi-task = simulated process-interference noise model (not measured in Cooja).
+          </p>
+        </div>
+      </div>
 
       <div className="card" style={{ marginBottom:20 }}>
         <div className="card__label" style={{ marginBottom:14 }}>📅 Seasonal Irrigation Calendar</div>
@@ -143,7 +187,7 @@ export default function DashboardPage({ history }) {
                     <td><span className={`irr-badge irr-badge--${r.irrigation}`} style={{ fontSize:".7rem", padding:"2px 9px" }}>{r.irrigation}</span></td>
                     <td><span style={{ fontWeight:700, color:STATUS_COLORS[r.cropStatus] }}>{r.cropStatus}</span></td>
                     <td>{r.confidence}%</td>
-                    <td style={{ fontFamily:"var(--font-display)" }}>{r.timeMs}ms</td>
+                     <td style={{ fontFamily:"var(--font-display)" }}>{r.taskMode==="single" ? r.singleTimeMs : r.multiTimeMs}ms</td>
                   </tr>
                 ))}
               </tbody>

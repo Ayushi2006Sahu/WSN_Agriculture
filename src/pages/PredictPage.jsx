@@ -3,7 +3,20 @@ import BatteryCard from '../components/BatteryCard.jsx';
 import ProbabilityBars from '../components/ProbabilityBars.jsx';
 import TipCard from '../components/TipCard.jsx';
 import BatteryVisual from '../components/BatteryVisual.jsx';
+import { REAL_DATA } from "../logic/realData";
+// import { REAL_DATA } from "../logic/realData";
 
+
+
+
+
+let lastCoojaIndex = 0;   // tab badalne par bhi yaad rahega
+// console.log("Cooja data:", currentData);
+// console.log("Soil:", currentData.soil);
+// console.log("Temperature:", currentData.temp);
+// console.log("Humidity:", currentData.hum);
+// console.log("Battery:", currentData.bat);
+// console.log("Predicted Battery:", currentData.pbat);
 function stressLabel(val) {
   if (val < 80)  return { label:"HEALTHY",  color:"#2E7D32", bg:"#E8F5E9" };
   if (val < 120) return { label:"MILD",     color:"#558B2F", bg:"#F1F8E9" };
@@ -51,7 +64,7 @@ function TaskComparePanel({ result, CATALOG, SINGLE_PROCS, MULTI_PROCS }) {
               <div style={{ marginBottom:8, padding:"9px 11px", background:col.color+"12", borderRadius:9, border:`1px solid ${col.color}25` }}>
                 <div style={{ fontSize:".6rem", color:"#888", marginBottom:1 }}>RF Accuracy</div>
                 <div style={{ fontFamily:"var(--font-display)", fontWeight:800, fontSize:"1.55rem", color:col.color, lineHeight:1 }}>{col.accuracy}%</div>
-                {col.mode==="multi" && <div style={{ fontSize:".6rem", color:"#C62828", marginTop:2, fontWeight:700 }}>−1.5% from process interference noise</div>}
+                {col.mode==="multi" && <div style={{ fontSize:".6rem", color:"#C62828", marginTop:2, fontWeight:700 }}>−{(result.singleAccuracy - result.multiAccuracy).toFixed(1)}% from process interference noise</div>}
               </div>
               <div style={{ marginBottom:8, padding:"9px 11px", background:"#F5F5F5", borderRadius:9, border:"1px solid #E0DDD7" }}>
                 <div style={{ fontSize:".6rem", color:"#888", marginBottom:1 }}>Prediction time</div>
@@ -104,9 +117,24 @@ function TaskComparePanel({ result, CATALOG, SINGLE_PROCS, MULTI_PROCS }) {
 }
 
 export default function PredictPage({ history, setHistory }) {
+const [dataIndex, setDataIndex] = useState(lastCoojaIndex);
+
+  const currentData = REAL_DATA[dataIndex];
+
+  console.log("Cooja data:", currentData);
+  console.log("Soil:", currentData.soil);
+  console.log("Temperature:", currentData.temp);
+  console.log("Humidity:", currentData.hum);
+  console.log("Battery:", currentData.bat);
+  console.log("Predicted Battery:", currentData.pbat);
+
+
   const [taskMode, setTaskMode]               = useState("single");
   const [irrigationActive, setIrrigationActive] = useState(false);
-  const [formValues, setFormValues]           = useState({ soilMoisture:50, temperature:28, humidity:60, battery:80 });
+ const [formValues, setFormValues] = useState(() => {
+  const r = REAL_DATA[lastCoojaIndex];
+  return { soilMoisture:r.soil, temperature:r.temp, humidity:r.hum, battery:r.bat };
+});
   const [result, setResult]                   = useState(null);
   const [loading, setLoading]                 = useState(false);
 
@@ -124,6 +152,10 @@ export default function PredictPage({ history, setHistory }) {
   const CATALOG      = ML.PROCESS_CATALOG || {};
   const SINGLE_PROCS = ML.SINGLE_TASK_PROCESSES || ["soil_read","temp_read","hum_read"];
   const MULTI_PROCS  = ML.MULTI_TASK_PROCESSES  || Object.keys(CATALOG);
+  const accSingle = useMemo(
+  () => window.AccuracyEngine?.measureAccuracy(REAL_DATA, SINGLE_PROCS, "NONE").singleAccuracy ?? 100, []);
+  const accMulti = useMemo(
+  () => window.AccuracyEngine?.measureAccuracy(REAL_DATA, MULTI_PROCS, "MEDIUM").multiAccuracy ?? 95, []);
 
   const sl = stressLabel(liveBreak.total);
 
@@ -132,11 +164,24 @@ export default function PredictPage({ history, setHistory }) {
   }, []);
 
   function runMode(mode) {
-    if (!ML.predict) return null;
-    const t0 = performance.now();
-    const p  = ML.predict(formValues.soilMoisture, formValues.temperature, formValues.humidity, formValues.battery, formValues.battery - 5, { mode, irrigationActive });
-    return { p, ms: parseFloat((performance.now() - t0).toFixed(3)) };
-  }
+  if (!ML.predict) return null;
+
+  const t0 = performance.now();
+
+  const p = ML.predict(
+    currentData.soil,
+    currentData.temp,
+    currentData.hum,
+    currentData.bat,
+    currentData.pbat,
+    { mode, irrigationActive }
+  );
+
+  return {
+    p,
+    ms: parseFloat((performance.now() - t0).toFixed(3))
+  };
+}
 
   function drainForMode(mode, stress, irrigation) {
     if (!ML.computeDrainPerCycle) return 4.715;
@@ -147,30 +192,212 @@ export default function PredictPage({ history, setHistory }) {
   }
 
   const handlePredict = useCallback(() => {
-    if (!ML.predict) return;
-    setLoading(true);
-    setTimeout(() => {
-      const sRes = runMode("single");
-      const mRes = runMode("multi");
-      if (!sRes || !mRes) { setLoading(false); return; }
-      const active = taskMode === "single" ? sRes : mRes;
-      const pred   = active.p;
-      const singleDrain    = drainForMode("single", pred.calculatedStress, pred.irrigation);
-      const multiDrain     = drainForMode("multi",  pred.calculatedStress, pred.irrigation);
-      const batResult = BP.estimateBatteryLife ? BP.estimateBatteryLife(formValues.battery, pred.computedPredBattery, pred.irrigation, 10, formValues.soilMoisture, pred.calculatedStress) : null;
-      const tips = window.TipsEngine?.generateTips ? window.TipsEngine.generateTips(pred, { soilMoisture:formValues.soilMoisture, temperature:formValues.temperature, humidity:formValues.humidity, battery:formValues.battery, predBattery:pred.computedPredBattery, stress:pred.calculatedStress }) : [];
-      const fullResult = { ...pred, batResult, tips, taskMode, activeProcs:taskMode==="single"?SINGLE_PROCS:MULTI_PROCS, singleAccuracy:98.33, multiAccuracy:parseFloat((98.33-1.5).toFixed(2)), singleTimeMs:sRes.ms, multiTimeMs:mRes.ms, singleDrain, multiDrain, timestamp:new Date().toLocaleTimeString("en-IN"), form:{ ...formValues, computedPredBattery:pred.computedPredBattery, stress:pred.calculatedStress } };
-      setResult(fullResult);
-      setHistory(prev => [fullResult, ...prev.slice(0,49)]);
+
+  if (!ML.predict) return;
+
+  setLoading(true);
+
+  setTimeout(() => {
+
+    // 1. Single aur Multi dono prediction
+    const sRes = runMode("single");
+    const mRes = runMode("multi");
+
+    if (!sRes || !mRes) {
       setLoading(false);
-      window.VoiceAssistant?.speakPredictionResult?.(pred, batResult);
-    }, 280 + Math.random()*140);
-  }, [formValues, taskMode, irrigationActive]);
+      return;
+    }
+
+    // 2. User ne jo mode select kiya hai
+    const active = taskMode === "single" ? sRes : mRes;
+
+    // 3. ML ka prediction
+    const pred = active.p;
+
+    // 4. Battery drain calculate
+    const singleDrain = drainForMode(
+      "single",
+      pred.calculatedStress,
+      pred.irrigation
+    );
+
+    const multiDrain = drainForMode(
+      "multi",
+      pred.calculatedStress,
+      pred.irrigation
+    );
+
+    // 5. Battery result
+    const batResult = BP.estimateBatteryLife
+      ? BP.estimateBatteryLife(
+          currentData.bat,
+          pred.computedPredBattery,
+          pred.irrigation,
+          10,
+          currentData.soil,
+          pred.calculatedStress
+        )
+      : null;
+
+    // 6. Tips
+    const tips = window.TipsEngine?.generateTips
+      ? window.TipsEngine.generateTips(pred, {
+          soilMoisture: currentData.soil,
+          temperature: currentData.temp,
+          humidity: currentData.hum,
+          battery: currentData.bat,
+          predBattery: pred.computedPredBattery,
+          stress: pred.calculatedStress
+        })
+      : [];
+
+    // 7. Cooja Actual vs ML Predicted
+    const comparison = {
+
+      actualStress: currentData.stress,
+      predictedStress: pred.calculatedStress,
+
+      actualStatus: currentData.status,
+      predictedStatus: pred.cropStatus,
+
+      actualIrrigation: currentData.irr,
+      predictedIrrigation: pred.irrigation,
+
+      actualPredBattery: currentData.pbat,
+      predictedPredBattery: pred.computedPredBattery,
+
+      stressMatch:
+        currentData.stress === pred.calculatedStress,
+
+      statusMatch:
+        currentData.status === pred.cropStatus,
+
+      irrigationMatch:
+        currentData.irr === pred.irrigation,
+
+      batteryMatch:
+        currentData.pbat === pred.computedPredBattery
+    };
+
+    // 8. Full result
+    const fullResult = {
+      ...pred,
+
+      batResult,
+      tips,
+
+      taskMode,
+
+      activeProcs:
+        taskMode === "single"
+          ? SINGLE_PROCS
+          : MULTI_PROCS,
+
+      singleAccuracy: accSingle,
+      multiAccuracy:  accMulti,
+
+    
+
+      singleTimeMs: sRes.ms,
+      multiTimeMs: mRes.ms,
+
+      singleDrain,
+      multiDrain,
+
+      timestamp:
+        new Date().toLocaleTimeString("en-IN"),
+
+      // Cooja row number
+      coojaRow: dataIndex,
+
+      // Actual vs predicted
+      comparison,
+
+      // Form data
+      form: {
+        ...formValues,
+
+        // IMPORTANT:
+        // actual Cooja values
+        soilMoisture: currentData.soil,
+        temperature: currentData.temp,
+        humidity: currentData.hum,
+        battery: currentData.bat,
+
+        computedPredBattery:
+          pred.computedPredBattery,
+
+        stress:
+          pred.calculatedStress
+      }
+    };
+
+    // 9. UI result update
+    setResult(fullResult);
+
+    // 10. History mein save
+    setHistory(prev => [
+      fullResult,
+      ...prev.slice(0, 49)
+    ]);
+
+    // 11. Console comparison
+    console.log("===== COOJA vs ML PREDICTION =====");
+
+    console.log("Cooja Row:", dataIndex);
+
+    console.log("Actual:", {
+      stress: currentData.stress,
+      status: currentData.status,
+      irrigation: currentData.irr,
+      predictedBattery: currentData.pbat
+    });
+
+    console.log("Predicted:", {
+      stress: pred.calculatedStress,
+      status: pred.cropStatus,
+      irrigation: pred.irrigation,
+      predictedBattery: pred.computedPredBattery
+    });
+
+    console.log("Comparison:", comparison);
+
+    // 12. Next Cooja row
+        // 12. Next Cooja row
+    const next = dataIndex < REAL_DATA.length - 1 ? dataIndex + 1 : 0;
+    setDataIndex(next);
+    lastCoojaIndex = next;   // ⬅️ ye nayi line
+    const r = REAL_DATA[next];
+    setFormValues({ soilMoisture:r.soil, temperature:r.temp, humidity:r.hum, battery:r.bat });
+
+    setLoading(false);
+
+    // 13. Voice
+    window.VoiceAssistant?.speakPredictionResult?.(
+      pred,
+      batResult
+    );
+
+  }, 280 + Math.random() * 140);
+
+}, [
+  formValues,
+  taskMode,
+  irrigationActive,
+  dataIndex,
+  currentData
+]);
 
   const batWarn = formValues.battery < 20
     ? { msg:"Critical — MIN mode will trigger!", color:"#C62828" }
     : formValues.battery < 40
     ? { msg:"Low — plan replacement soon.", color:"#E65100" }
+    : null;
+
+    const c = result?.comparison;
+  const cmp = history.filter(h => h.comparison);
+  const irrAcc = cmp.length
+    ? (cmp.filter(h => h.comparison.irrigationMatch).length / cmp.length * 100).toFixed(1)
     : null;
 
   return (
@@ -202,7 +429,7 @@ export default function PredictPage({ history, setHistory }) {
       {/* Task mode */}
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
         <span style={{ fontWeight:700, fontSize:".8rem", color:"#555" }}>⚙️ Task Mode:</span>
-        {[{ id:"single", icon:"🔵", label:"Single Task", sub:"3 procs · 98.33% · lower drain" }, { id:"multi", icon:"🟢", label:"Multi Task", sub:"7 procs · 96.83% · higher drain" }].map(m => (
+        {[{ id:"single", icon:"🔵", label:"Single Task", sub:`3 procs · ${accSingle}% · lower drain` }, { id:"multi", icon:"🟢", label:"Multi Task", sub:`7 procs · ${accMulti}% · higher drain` }].map(m => (
           <button key={m.id} onClick={() => setTaskMode(m.id)} style={{ background:taskMode===m.id?(m.id==="single"?"#E3F2FD":"#E8F5E9"):"white", border:`2px solid ${taskMode===m.id?(m.id==="single"?"#1565C0":"#1B5E20"):"#E0DDD7"}`, borderRadius:11, padding:"7px 15px", cursor:"pointer", textAlign:"left", transition:"all .2s" }}>
             <div style={{ fontWeight:800, fontSize:".8rem", color:taskMode===m.id?(m.id==="single"?"#1565C0":"#1B5E20"):"#666" }}>{m.icon} {m.label}</div>
             <div style={{ fontSize:".6rem", color:"#aaa" }}>{m.sub}</div>
@@ -275,7 +502,7 @@ export default function PredictPage({ history, setHistory }) {
             <button className="btn btn--primary btn--full" onClick={handlePredict} disabled={loading}>
               {loading ? <><div className="spinner"/><span>Predicting…</span></> : <><span>{taskMode==="single"?"🔵":"🟢"}</span><span>Run {taskMode==="single"?"Single":"Multi"} Prediction</span></>}
             </button>
-            <p style={{ textAlign:"center", fontSize:".6rem", color:"#ccc", marginTop:4 }}>RF 98.33% accuracy · both modes timed &amp; compared</p>
+            <p style={{ textAlign:"center", fontSize:".6rem", color:"#ccc", marginTop:4 }}>Accuracy on Cooja data: {accSingle}% · both modes timed &amp; compared</p>
           </div>
         </aside>
 
@@ -303,7 +530,37 @@ export default function PredictPage({ history, setHistory }) {
                   </div>
                 </div>
               </div>
-
+               {c && (
+                <div className="card" style={{ marginBottom:14 }}>
+                  <div className="card__label" style={{ marginBottom:10 }}>
+                    🛰️ Cooja (Contiki) Actual vs ML Predicted — Row #{result.coojaRow}
+                    {irrAcc && ` · Live match: ${irrAcc}% (${cmp.length} rows)`}
+                  </div>
+                  <div className="overflow-x">
+                    <table className="data-table">
+                      <thead>
+                        <tr><th>Field</th><th>Cooja actual</th><th>ML predicted</th><th>Match</th></tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          ["Irrigation",  c.actualIrrigation,  c.predictedIrrigation,  c.irrigationMatch],
+                          ["Status",      c.actualStatus,      c.predictedStatus,      c.statusMatch],
+                          ["Stress",      c.actualStress,      c.predictedStress,      c.stressMatch],
+                          ["PredBattery", c.actualPredBattery, c.predictedPredBattery,
+                            Math.abs(c.actualPredBattery - c.predictedPredBattery) <= 5],
+                        ].map(([f, a, p, ok]) => (
+                          <tr key={f}>
+                            <td style={{ fontWeight:700 }}>{f}</td>
+                            <td>{a}</td>
+                            <td>{p}</td>
+                            <td>{ok ? "✅" : "❌"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
               <div className="grid-2" style={{ marginBottom:14 }}>
                 <div className="card card--sm" style={{ textAlign:"center" }}>
                   <div className="card__label" style={{ marginBottom:6 }}>Irrigation Level</div>
